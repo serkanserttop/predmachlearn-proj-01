@@ -1,0 +1,99 @@
+---
+title: 'Predicting Exercise Manner with Random Forest'
+author: "Serkan Serttop"
+date: "21 Jun 2014"
+output: html_document
+---
+##Background
+Using data collected from sensors, one can examine the manner in which subjects perform physical exercises. In this study, we were asked to examine the data provided here <http://groupware.les.inf.puc-rio.br/har>. The training dataset is located at <http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv> while the test dataset is provided here <http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>. Subjects were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Our goal is to infer which technique was used according to the sensor data collected. We will be building a predictive model using Random Forest machine learning technique.
+
+##Loading Data
+
+```{r}
+#download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./pml-training.csv")
+#download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./pml-testing.csv")
+train.org = read.csv("pml-training.csv", na.strings=c("", "NA", "NULL"))
+test.target = read.csv("pml-testing.csv", na.strings=c("", "NA", "NULL"))
+dim(train.org)
+dim(test.target)
+```
+
+Later on we will use Random Forest to create our model. Random Forest does not work with NA values. We have 160 variables in our original dataset. We will remove columns that contain NA values.
+
+```{r}
+train.noNA <- train.org[ , colSums(is.na(train.org)) == 0]
+dim(train.noNA)
+```
+
+Now we have 60 variables left, but there are also few more that can be removed as they are unlikely to be related to our dependent variable.
+
+```{r}
+to_remove = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+train.noNA.removed <- train.noNA[, -which(names(train.noNA) %in% to_remove)]
+dim(train.noNA.removed)
+```
+
+After this procedure, we are down to 53 total variables, including dependent variable "classe". Now we will split our dataset into training and testing sets.
+For this purpose, we will use "caTools". We will use 70% as our train set ratio.
+
+```{r results="hide"}
+library(caTools)
+set.seed(12345)
+```
+```{r}
+split = sample.split(train.noNA.removed, SplitRatio = 0.7) 
+train.split = subset(train.noNA.removed, split == TRUE)
+test.split = subset(train.noNA.removed, split == FALSE)
+```
+
+Now we can load randomForest library and build our model on the training set.
+
+```{r results="hide"}
+library(randomForest)
+set.seed(12345)
+```
+```{r}
+model.RF = randomForest(classe ~ ., data = train.split)
+model.RF
+```
+
+Our Random Forest model shows OOB estimate of  error rate: 0.54% for the data it was trained with. Now we will predict it for in-sample and out-of sample accuracy.
+
+```{r}
+train.pred = predict(model.RF, train.split)
+table(train.pred, train.split$classe)
+```
+
+We can see without any calculation that our in-sample accuracy is 100%.
+
+```{r}
+test.pred = predict(model.RF, test.split)
+table(test.pred, test.split$classe)
+(1684 + 1143 + 1033 + 963 + 1087) / nrow(test.split)
+```
+
+Our out-of-sample accuracy is 99.75%.
+
+```{r echo=FALSE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+```
+
+Now we can predict the target test set provided.
+
+```{r}
+answers <- predict(model.RF, test.target)
+answers
+```
+
+```{r echo=FALSE}
+pml_write_files(answers)
+```
+
+Answers displayed above were submitted and were found to be 100% accurate.
+Our model seems to be a good predictor for "classe" variable.
